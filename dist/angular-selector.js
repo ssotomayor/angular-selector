@@ -1,169 +1,170 @@
 (function (angular) {
-
-    // Key codes
-    var KEYS = { up: 38, down: 40, left: 37, right: 39, escape: 27, enter: 13, backspace: 8, delete: 46, shift: 16, leftCmd: 91, rightCmd: 93, ctrl: 17, alt: 18, tab: 9 };
-
-    var $filter, $timeout, $window, $http, $q;
-
-    var Selector = (function () {
-
-        function getStyles(element) {
-            return !(element instanceof HTMLElement) ? {} :
-                    element.ownerDocument && element.ownerDocument.defaultView.opener
-                ? element.ownerDocument.defaultView.getComputedStyle(element)
-                : window.getComputedStyle(element);
-        }
-
-        // Selector directive
-        function Selector(filter, timeout, window, http, q) {
-            this.replace    = true;
-            this.transclude = true;
-            this.scope      = {
-                name:                   '@?',
-                value:                  '=model',
-                disabled:               '=?disable',
-                disableSearch:          '=?',
-                required:               '=?require',
-                multiple:               '=?multi',
-                placeholder:            '@?',
-                valueAttr:              '@',
-                labelAttr:              '@?',
-                groupAttr:              '@?',
-                options:                '=?',
-                debounce:               '=?',
-                create:                 '&?',
-                limit:                  '=?',
-                rtl:                    '=?',
-                api:                    '=?',
-                change:                 '&?',
-                remote:                 '&?',
-                remoteParam:            '@?',
-                remoteValidation:       '&?',
-                remoteValidationParam:  '@?',
-                removeButton:           '=?',
-                softDelete:             '=?',
-                closeAfterSelection:    '=?',
-                viewItemTemplate:       '=?',
-                dropdownItemTemplate:   '=?',
-                dropdownCreateTemplate: '=?',
-                dropdownGroupTemplate:  '=?'
-            };
-            this.templateUrl = 'selector/selector.html';
-            $filter  = filter;
-            $timeout = timeout;
-            $window  = window;
-            $http    = http;
-            $q       = q;
-        }
-        Selector.prototype.$inject = ['$filter', '$timeout', '$window', '$http', '$q'];
-        Selector.prototype.link = function (scope, element, attrs, controller, transclude) {
-            transclude(scope, function (clone, scope) {
-                var filter       = $filter('filter'),
-                    input        = angular.element(element[0].querySelector('.selector-input input')),
-                    dropdown     = angular.element(element[0].querySelector('.selector-dropdown')),
-                    inputCtrl    = input.controller('ngModel'),
-                    selectCtrl   = element.find('select').controller('ngModel'),
-                    initDeferred = $q.defer(),
+	
+	// Key codes
+	var KEYS = { up: 38, down: 40, left: 37, right: 39, escape: 27, enter: 13, backspace: 8, delete: 46, shift: 16, leftCmd: 91, rightCmd: 93, ctrl: 17, alt: 18, tab: 9 };
+	
+	var $filter, $timeout, $window, $http, $q;
+	
+	var Selector = (function () {
+		
+		function getStyles(element) {
+			return !(element instanceof HTMLElement) ? {} :
+				element.ownerDocument && element.ownerDocument.defaultView.opener
+					? element.ownerDocument.defaultView.getComputedStyle(element)
+					: window.getComputedStyle(element);
+		}
+		
+		// Selector directive
+		function Selector(filter, timeout, window, http, q) {
+			this.restrict   = 'EAC';
+			this.replace    = true;
+			this.transclude = true;
+			this.scope      = {
+				name:                   '@?',
+				value:                  '=model',
+				disabled:               '=?disable',
+				disableSearch:          '=?',
+				required:               '=?require',
+				multiple:               '=?multi',
+				placeholder:            '@?',
+				valueAttr:              '@',
+				labelAttr:              '@?',
+				groupAttr:              '@?',
+				options:                '=?',
+				debounce:               '=?',
+				create:                 '&?',
+				limit:                  '=?',
+				rtl:                    '=?',
+				api:                    '=?',
+				change:                 '&?',
+				remote:                 '&?',
+				remoteParam:            '@?',
+				remoteValidation:       '&?',
+				remoteValidationParam:  '@?',
+				removeButton:           '=?',
+				softDelete:             '=?',
+				closeAfterSelection:    '=?',
+				viewItemTemplate:       '=?',
+				dropdownItemTemplate:   '=?',
+				dropdownCreateTemplate: '=?',
+				dropdownGroupTemplate:  '=?'
+			};
+			this.templateUrl = 'selector/selector.html';
+			$filter  = filter;
+			$timeout = timeout;
+			$window  = window;
+			$http    = http;
+			$q       = q;
+		}
+		Selector.prototype.$inject = ['$filter', '$timeout', '$window', '$http', '$q'];
+		Selector.prototype.link = function (scope, element, attrs, controller, transclude) {
+			transclude(scope, function (clone, scope) {
+				var filter       = $filter('filter'),
+					input        = angular.element(element[0].querySelector('.selector-input input')),
+					dropdown     = angular.element(element[0].querySelector('.selector-dropdown')),
+					inputCtrl    = input.controller('ngModel'),
+					selectCtrl   = element.find('select').controller('ngModel'),
+					initDeferred = $q.defer(),
                     allOptions = [],
-                    defaults     = {
-                        api:                    {},
-                        search:                 '',
-                        disableSearch:          false,
-                        selectedValues:         [],
-                        highlighted:            0,
-                        valueAttr:              null,
-                        labelAttr:              'label',
-                        groupAttr:              'group',
-                        options:                [],
-                        debounce:               0,
-                        limit:                  Infinity,
-                        remoteParam:            'q',
-                        remoteValidationParam:  'value',
-                        removeButton:           true,
-                        viewItemTemplate:       'selector/item-default.html',
-                        dropdownItemTemplate:   'selector/item-default.html',
-                        dropdownCreateTemplate: 'selector/item-create.html',
-                        dropdownGroupTemplate:  'selector/group-default.html'
-                    };
-
-                // Default attributes
-                if (!angular.isDefined(scope.value) && scope.multiple) scope.value = [];
-                angular.forEach(defaults, function (value, key) {
-                    if (!angular.isDefined(scope[key])) scope[key] = value;
-                });
-                angular.forEach(['name', 'valueAttr', 'labelAttr'], function (attr) {
-                    if (!attrs[attr]) attrs[attr] = scope[attr];
-                });
-
-                // Options' utilities
-                scope.getObjValue = function (obj, path) {
-                    var key;
-                    if (!angular.isDefined(obj) || !angular.isDefined(path)) return obj;
-                    path = angular.isArray(path) ? path : path.split('.');
-                    key = path.shift();
-
-                    if (key.indexOf('[') > 0) {
-                        var match = key.match(/(\w+)\[(\d+)\]/);
-                        if (match !== null) {
-                            obj = obj[match[1]];
-                            key = match[2];
-                        }
-                    }
-                    return path.length === 0 ? obj[key] : scope.getObjValue(obj[key], path);
-                };
-                scope.setObjValue = function (obj, path, value) {
-                    var key;
-                    if (!angular.isDefined(obj)) obj = {};
-                    path = angular.isArray(path) ? path : path.split('.');
-                    key = path.shift();
-
-                    if (key.indexOf('[') > 0) {
-                        var match = key.match(/(\w+)\[(\d+)\]/);
-                        if (match !== null) {
-                            obj = obj[match[1]];
-                            key = match[2];
-                        }
-                    }
-                    obj[key] = path.length === 0 ? value : scope.setObjValue(obj[key], path, value);
-                    return obj;
-                };
-                scope.optionValue = function (option) {
-                    return scope.valueAttr == null ? option : scope.getObjValue(option, scope.valueAttr);
-                };
-                scope.optionEquals = function (option, value) {
-                    return angular.equals(scope.optionValue(option), angular.isDefined(value) ? value : scope.value);
-                };
-
-                // Value utilities
-                scope.setValue = function (value) {
-                    if (!scope.multiple) scope.value = scope.valueAttr == null ? value : scope.getObjValue(value || {}, scope.valueAttr);
-                    else scope.value = scope.valueAttr == null ? (value || []) : (value || []).map(function (option) { return scope.getObjValue(option, scope.valueAttr); });
-                };
-                scope.hasValue = function () {
-                    return scope.multiple ? (scope.value || []).length > 0 : !!scope.value;
-                };
-
-                // Remote fetching
-                scope.request = function (paramName, paramValue, remote, remoteParam) {
-                    var promise, remoteOptions = {};
-                    if (scope.disabled) return $q.reject();
-                    if (!angular.isDefined(remote))
-                        throw 'Remote attribute is not defined';
-
-                    scope.loading = true;
-                    scope.options = [];
-                    remoteOptions[paramName] = paramValue;
-                    promise = remote(remoteOptions);
-                    if (typeof promise.then !== 'function') {
-                        var settings = { method: 'GET', cache: true, params: {} };
-                        angular.extend(settings, promise);
-                        angular.extend(settings.params, promise.params);
-                        settings.params[remoteParam] = paramValue;
-                        promise = $http(settings);
-                    }
-                    promise
-                        .then(function (data) {
-                            scope.options = data.data || data;
+					defaults     = {
+						api:                    {},
+						search:                 '',
+						disableSearch:          false,
+						selectedValues:         [],
+						highlighted:            0,
+						valueAttr:              null,
+						labelAttr:              'label',
+						groupAttr:              'group',
+						options:                [],
+						debounce:               0,
+						limit:                  Infinity,
+						remoteParam:            'q',
+						remoteValidationParam:  'value',
+						removeButton:           true,
+						viewItemTemplate:       'selector/item-default.html',
+						dropdownItemTemplate:   'selector/item-default.html',
+						dropdownCreateTemplate: 'selector/item-create.html',
+						dropdownGroupTemplate:  'selector/group-default.html'
+					};
+				
+				// Default attributes
+				if (!angular.isDefined(scope.value) && scope.multiple) scope.value = [];
+				angular.forEach(defaults, function (value, key) {
+					if (!angular.isDefined(scope[key])) scope[key] = value;
+				});
+				angular.forEach(['name', 'valueAttr', 'labelAttr'], function (attr) {
+					if (!attrs[attr]) attrs[attr] = scope[attr];
+				});
+				
+				// Options' utilities
+				scope.getObjValue = function (obj, path) {
+					var key;
+					if (!angular.isDefined(obj) || !angular.isDefined(path)) return obj;
+					path = angular.isArray(path) ? path : path.split('.');
+					key = path.shift();
+					
+					if (key.indexOf('[') > 0) {
+						var match = key.match(/(\w+)\[(\d+)\]/);
+						if (match !== null) {
+							obj = obj[match[1]];
+							key = match[2];
+						}
+					}
+					return path.length === 0 ? obj[key] : scope.getObjValue(obj[key], path);
+				};
+				scope.setObjValue = function (obj, path, value) {
+					var key;
+					if (!angular.isDefined(obj)) obj = {};
+					path = angular.isArray(path) ? path : path.split('.');
+					key = path.shift();
+					
+					if (key.indexOf('[') > 0) {
+						var match = key.match(/(\w+)\[(\d+)\]/);
+						if (match !== null) {
+							obj = obj[match[1]];
+							key = match[2];
+						}
+					}
+					obj[key] = path.length === 0 ? value : scope.setObjValue(obj[key], path, value);
+					return obj;
+				};
+				scope.optionValue = function (option) {
+					return scope.valueAttr == null ? option : scope.getObjValue(option, scope.valueAttr);
+				};
+				scope.optionEquals = function (option, value) {
+					return angular.equals(scope.optionValue(option), angular.isDefined(value) ? value : scope.value);
+				};
+				
+				// Value utilities
+				scope.setValue = function (value) {
+					if (!scope.multiple) scope.value = scope.valueAttr == null ? value : scope.getObjValue(value || {}, scope.valueAttr);
+					else scope.value = scope.valueAttr == null ? (value || []) : (value || []).map(function (option) { return scope.getObjValue(option, scope.valueAttr); });
+				};
+				scope.hasValue = function () {
+					return scope.multiple ? (scope.value || []).length > 0 : !!scope.value;
+				};
+				
+				// Remote fetching
+				scope.request = function (paramName, paramValue, remote, remoteParam) {
+					var promise, remoteOptions = {};
+					if (scope.disabled) return $q.reject();
+					if (!angular.isDefined(remote))
+						throw 'Remote attribute is not defined';
+					
+					scope.loading = true;
+					scope.options = [];
+					remoteOptions[paramName] = paramValue;
+					promise = remote(remoteOptions);
+					if (typeof promise.then !== 'function') {
+						var settings = { method: 'GET', cache: true, params: {} };
+						angular.extend(settings, promise);
+						angular.extend(settings.params, promise.params);
+						settings.params[remoteParam] = paramValue;
+						promise = $http(settings);
+					}
+					promise
+						.then(function (data) {
+							scope.options = data.data || data;
                             allOptions = allOptions.concat(scope.options);
                             scope.filterOptions();
                             scope.loading = false;
@@ -462,45 +463,45 @@
                     else {
                         input.css('width', width + 'px')
                     }
-                };
-                scope.resetInput = function () {
-                    input.val('');
-                    scope.setInputWidth();
-                    $timeout(function () { scope.search = ''; });
-                };
-
-                scope.$watch('[search, options, value]', function () {
-                    // hide selected items
-                    scope.filterOptions();
-                    $timeout(function () {
-                        // set input width
-                        scope.setInputWidth();
-                        // repositionate dropdown
-                        if (scope.isOpen) scope.dropdownPosition();
-                    });
-                }, true);
-
-                // Update value
-                scope.updateValue = function (origin) {
-                    if (!angular.isDefined(origin)) origin = scope.selectedValues || [];
-                    scope.setValue(!scope.multiple ? origin[0] : origin);
-                };
-                scope.$watch('selectedValues', function (newValue, oldValue) {
-                    if (angular.equals(newValue, oldValue)) return;
-                    scope.updateValue();
-                    if (angular.isFunction(scope.change))
-                        scope.change(scope.multiple
-                            ? { newValue: newValue, oldValue: oldValue }
-                            : { newValue: (newValue || [])[0], oldValue: (oldValue || [])[0] });
-                }, true);
-                scope.$watchCollection('options', function (newValue, oldValue) {
-                    if (angular.equals(newValue, oldValue) || scope.remote) return;
-                    scope.updateSelected();
-                });
-
-                // Update selected values
-                scope.updateSelected = function () {
-                    if (!scope.multiple) scope.selectedValues = (scope.options || []).filter(function (option) { return scope.optionEquals(option); }).slice(0, 1);
+				};
+				scope.resetInput = function () {
+					input.val('');
+					scope.setInputWidth();
+					$timeout(function () { scope.search = ''; });
+				};
+				
+				scope.$watch('[search, options, value]', function () {
+					// hide selected items
+					scope.filterOptions();
+					$timeout(function () {
+						// set input width
+						scope.setInputWidth();
+						// repositionate dropdown
+						if (scope.isOpen) scope.dropdownPosition();
+					});
+				}, true);
+				
+				// Update value
+				scope.updateValue = function (origin) {
+					if (!angular.isDefined(origin)) origin = scope.selectedValues || [];
+					scope.setValue(!scope.multiple ? origin[0] : origin);
+				};
+				scope.$watch('selectedValues', function (newValue, oldValue) {
+					if (angular.equals(newValue, oldValue)) return;
+					scope.updateValue();
+					if (angular.isFunction(scope.change))
+						scope.change(scope.multiple
+							? { newValue: newValue, oldValue: oldValue }
+							: { newValue: (newValue || [])[0], oldValue: (oldValue || [])[0] });
+				}, true);
+				scope.$watchCollection('options', function (newValue, oldValue) {
+					if (angular.equals(newValue, oldValue) || scope.remote) return;
+					scope.updateSelected();
+				});
+				
+				// Update selected values
+				scope.updateSelected = function () {
+					if (!scope.multiple) scope.selectedValues = (scope.options || []).filter(function (option) { return scope.optionEquals(option); }).slice(0, 1);
                     else {
                         var val;
                         val = (scope.value || []).map(function (value) {
@@ -510,122 +511,122 @@
                         }).filter(function (value) { return angular.isDefined(value); }).slice(0, scope.limit);
                         scope.selectedValues = val;
                     }
-                };
-                scope.$watch('value', function (newValue, oldValue) {
-                    if (angular.equals(newValue, oldValue)) return;
-                    $q.when(!scope.remote || !scope.remoteValidation || !scope.hasValue()
-                            ? angular.noop
-                            : scope.fetchValidation(newValue)
-                    ).then(function () {
-                            scope.updateSelected();
-                            scope.filterOptions();
-                            scope.updateValue();
-                        });
-                }, true);
+				};
+				scope.$watch('value', function (newValue, oldValue) {
+					if (angular.equals(newValue, oldValue)) return;
+					$q.when(!scope.remote || !scope.remoteValidation || !scope.hasValue()
+						? angular.noop
+						: scope.fetchValidation(newValue)
+					).then(function () {
+						scope.updateSelected();
+						scope.filterOptions();
+						scope.updateValue();
+					});
+				}, true);
+				
+				// DOM event listeners
+				input = angular.element(element[0].querySelector('.selector-input input'))
+					.on('focus', function () {
+						$timeout(function () {
+							scope.$apply(scope.open);
+						});
+					})
+					.on('blur', function () {
+						scope.$apply(scope.close);
+					})
+					.on('keydown', function (e) {
+						scope.$apply(function () {
+							scope.keydown(e);
+						});
+					})
+					.on('input', function () {
+						scope.setInputWidth();
+					});
+				dropdown
+					.on('mousedown', function (e) {
+						e.preventDefault();
+					});
+				angular.element($window)
+					.on('resize', function () {
+						scope.dropdownPosition();
+					});
 
-                // DOM event listeners
-                input = angular.element(element[0].querySelector('.selector-input input'))
-                    .on('focus', function () {
-                        $timeout(function () {
-                            scope.$apply(scope.open);
-                        });
-                    })
-                    .on('blur', function () {
-                        scope.$apply(scope.close);
-                    })
-                    .on('keydown', function (e) {
-                        scope.$apply(function () {
-                            scope.keydown(e);
-                        });
-                    })
-                    .on('input', function () {
-                        scope.setInputWidth();
-                    });
-                dropdown
-                    .on('mousedown', function (e) {
-                        e.preventDefault();
-                    });
-                angular.element($window)
-                    .on('resize', function () {
-                        scope.dropdownPosition();
-                    });
-
-                // Update select controller
-                scope.$watch(function () { return inputCtrl.$pristine; }, function ($pristine) {
-                    selectCtrl[$pristine ? '$setPristine' : '$setDirty']();
-                });
-                scope.$watch(function () { return inputCtrl.$touched; }, function ($touched) {
-                    selectCtrl[$touched ? '$setTouched' : '$setUntouched']();
-                });
-
-                // Expose APIs
-                angular.forEach(['open', 'close', 'fetch'], function (api) {
-                    scope.api[api] = scope[api];
-                });
-                scope.api.focus = function () {
-                    input[0].focus();
-                };
-                scope.api.set = function (value) {
-                    return scope.value = value;
-                };
-                scope.api.unset = function (value) {
-                    var values  = !value ? scope.selectedValues : (scope.selectedValues || []).filter(function (option) { return scope.optionEquals(option, value); }),
-                        indexes =
-                            scope.selectedValues.map(function (option, index) {
-                                return scope.inOptions(values, option) ? index : -1;
-                            }).filter(function (index) { return index >= 0; });
-
-                    angular.forEach(indexes, function (index, i) {
-                        scope.unset(index - i);
-                    });
-                };
-            });
-        };
-
-        return Selector;
-    })();
-
-    angular
-        .module('selector', [])
-        .run(['$templateCache', function ($templateCache) {
-            $templateCache.put('selector/selector.html',
-                    '<div class="selector-container" ng-attr-dir="{{rtl ? \'rtl\' : \'ltr\'}}" ' +
-                    'ng-class="{open: isOpen, empty: !filteredOptions.length && (!create || !search), multiple: multiple, \'has-value\': hasValue(), rtl: rtl, ' +
-                    'loading: loading, \'remove-button\': removeButton, disabled: disabled}">' +
-                    '<select name="{{name}}" ng-hide="true" ng-required="required && !hasValue()" ' +
-                    'ng-model="selectedValues" multiple ng-options="option as getObjValue(option, labelAttr) for option in selectedValues"></select>' +
-                    '<label class="selector-input">' +
-                    '<ul class="selector-values">' +
-                    '<li ng-repeat="(index, option) in selectedValues track by index">' +
-                    '<div ng-include="viewItemTemplate"></div>' +
-                    '<div ng-if="multiple" class="selector-helper" ng-click="!disabled && unset(index)">' +
-                    '<span class="selector-icon"></span>' +
-                    '</div>' +
-                    '</li>' +
-                    '</ul>' +
-                    '<input ng-model="search" placeholder="{{!hasValue() ? placeholder : \'\'}}" ng-model-options="{debounce: debounce}"' +
-                    'ng-disabled="disabled" ng-readonly="disableSearch" ng-required="required && !hasValue()" autocomplete="off">' +
-                    '<div ng-if="!multiple || loading" class="selector-helper selector-global-helper" ng-click="!disabled && removeButton && unset()">' +
-                    '<span class="selector-icon"></span>' +
-                    '</div>' +
-                    '</label>' +
-                    '<ul class="selector-dropdown" ng-show="filteredOptions.length > 0 || (create && search)">' +
-                    '<li class="selector-option create" ng-class="{active: highlighted == -1}" ng-if="create && search" ' +
-                    'ng-include="dropdownCreateTemplate" ng-mouseover="highlight(-1)" ng-click="createOption(search)"></li>' +
-                    '<li ng-repeat-start="(index, option) in filteredOptions track by index" class="selector-optgroup" ' +
-                    'ng-include="dropdownGroupTemplate" ng-show="groupAttr && ' +
-                    '(getObjValue(option, groupAttr) && index == 0 || getObjValue(filteredOptions[index - 1], groupAttr) != getObjValue(option, groupAttr))"></li>' +
-                    '<li ng-repeat-end ng-class="{active: highlighted == index, grouped: groupAttr && getObjValue(option, groupAttr)}" class="selector-option" ' +
-                    'ng-include="dropdownItemTemplate" ng-mouseover="highlight(index)" ng-click="set()"></li>' +
-                    '</ul>' +
-                    '</div>'
-            );
-            $templateCache.put('selector/item-create.html', 'Add <i ng-bind="search"></i>');
-            $templateCache.put('selector/item-default.html', '<span ng-bind="getObjValue(option, labelAttr) || option"></span>');
-            $templateCache.put('selector/group-default.html', '<span ng-bind="getObjValue(option, groupAttr)"></span>');
-        }])
-        .directive('selector', ['$filter', '$timeout', '$window', '$http', '$q', function ($filter, $timeout, $window, $http, $q) {
-            return new Selector($filter, $timeout, $window, $http, $q);
-        }]);
-
+				// Update select controller
+				scope.$watch(function () { return inputCtrl.$pristine; }, function ($pristine) {
+					selectCtrl[$pristine ? '$setPristine' : '$setDirty']();
+				});
+				scope.$watch(function () { return inputCtrl.$touched; }, function ($touched) {
+					selectCtrl[$touched ? '$setTouched' : '$setUntouched']();
+				});
+				
+				// Expose APIs
+				angular.forEach(['open', 'close', 'fetch'], function (api) {
+					scope.api[api] = scope[api];
+				});
+				scope.api.focus = function () {
+					input[0].focus();
+				};
+				scope.api.set = function (value) {
+					return scope.value = value;
+				};
+				scope.api.unset = function (value) {
+					var values  = !value ? scope.selectedValues : (scope.selectedValues || []).filter(function (option) { return scope.optionEquals(option, value); }),
+						indexes =
+							scope.selectedValues.map(function (option, index) {
+								return scope.inOptions(values, option) ? index : -1;
+							}).filter(function (index) { return index >= 0; });
+					
+					angular.forEach(indexes, function (index, i) {
+						scope.unset(index - i);
+					});
+				};
+			});
+		};
+		
+		return Selector;
+	})();
+	
+	angular
+		.module('selector', [])
+		.run(['$templateCache', function ($templateCache) {
+			$templateCache.put('selector/selector.html',
+				'<div class="selector-container" ng-attr-dir="{{rtl ? \'rtl\' : \'ltr\'}}" ' +
+					'ng-class="{open: isOpen, empty: !filteredOptions.length && (!create || !search), multiple: multiple, \'has-value\': hasValue(), rtl: rtl, ' +
+						'loading: loading, \'remove-button\': removeButton, disabled: disabled}">' +
+					'<select name="{{name}}" ng-hide="true" ng-required="required && !hasValue()" ' +
+						'ng-model="selectedValues" multiple ng-options="option as getObjValue(option, labelAttr) for option in selectedValues"></select>' +
+					'<label class="selector-input">' +
+						'<ul class="selector-values">' +
+							'<li ng-repeat="(index, option) in selectedValues track by index">' +
+								'<div ng-include="viewItemTemplate"></div>' +
+								'<div ng-if="multiple" class="selector-helper" ng-click="!disabled && unset(index)">' +
+									'<span class="selector-icon"></span>' +
+								'</div>' +
+							'</li>' +
+						'</ul>' +
+						'<input ng-model="search" placeholder="{{!hasValue() ? placeholder : \'\'}}" ng-model-options="{debounce: debounce}"' +
+							'ng-disabled="disabled" ng-readonly="disableSearch" ng-required="required && !hasValue()" autocomplete="off">' +
+						'<div ng-if="!multiple || loading" class="selector-helper selector-global-helper" ng-click="!disabled && removeButton && unset()">' +
+							'<span class="selector-icon"></span>' +
+						'</div>' +
+					'</label>' +
+					'<ul class="selector-dropdown" ng-show="filteredOptions.length > 0 || (create && search)">' +
+						'<li class="selector-option create" ng-class="{active: highlighted == -1}" ng-if="create && search" ' +
+							'ng-include="dropdownCreateTemplate" ng-mouseover="highlight(-1)" ng-click="createOption(search)"></li>' +
+						'<li ng-repeat-start="(index, option) in filteredOptions track by index" class="selector-optgroup" ' +
+							'ng-include="dropdownGroupTemplate" ng-show="groupAttr && ' +
+							'(getObjValue(option, groupAttr) && index == 0 || getObjValue(filteredOptions[index - 1], groupAttr) != getObjValue(option, groupAttr))"></li>' +
+						'<li ng-repeat-end ng-class="{active: highlighted == index, grouped: groupAttr && getObjValue(option, groupAttr)}" class="selector-option" ' +
+							'ng-include="dropdownItemTemplate" ng-mouseover="highlight(index)" ng-click="set()"></li>' +
+					'</ul>' +
+				'</div>'
+			);
+			$templateCache.put('selector/item-create.html', 'Add <i ng-bind="search"></i>');
+			$templateCache.put('selector/item-default.html', '<span ng-bind="getObjValue(option, labelAttr) || option"></span>');
+			$templateCache.put('selector/group-default.html', '<span ng-bind="getObjValue(option, groupAttr)"></span>');
+		}])
+		.directive('selector', ['$filter', '$timeout', '$window', '$http', '$q', function ($filter, $timeout, $window, $http, $q) {
+			return new Selector($filter, $timeout, $window, $http, $q);
+		}]);
+	
 })(window.angular);
