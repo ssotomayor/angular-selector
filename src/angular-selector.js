@@ -1,19 +1,19 @@
 (function (angular) {
-	
+
 	// Key codes
 	var KEYS = { up: 38, down: 40, left: 37, right: 39, escape: 27, enter: 13, backspace: 8, delete: 46, shift: 16, leftCmd: 91, rightCmd: 93, ctrl: 17, alt: 18, tab: 9 };
-	
+
 	var $filter, $timeout, $window, $http, $q;
-	
+
 	var Selector = (function () {
-		
+
 		function getStyles(element) {
 			return !(element instanceof HTMLElement) ? {} :
 				element.ownerDocument && element.ownerDocument.defaultView.opener
 					? element.ownerDocument.defaultView.getComputedStyle(element)
 					: window.getComputedStyle(element);
 		}
-		
+
 		// Selector directive
 		function Selector(filter, timeout, window, http, q) {
 			this.restrict   = 'EAC';
@@ -65,7 +65,6 @@
 					inputCtrl    = input.controller('ngModel'),
 					selectCtrl   = element.find('select').controller('ngModel'),
 					initDeferred = $q.defer(),
-                    allOptions = [],
 					defaults     = {
 						api:                    {},
 						search:                 '',
@@ -86,7 +85,7 @@
 						dropdownCreateTemplate: 'selector/item-create.html',
 						dropdownGroupTemplate:  'selector/group-default.html'
 					};
-				
+
 				// Default attributes
 				if (!angular.isDefined(scope.value) && scope.multiple) scope.value = [];
 				angular.forEach(defaults, function (value, key) {
@@ -95,14 +94,14 @@
 				angular.forEach(['name', 'valueAttr', 'labelAttr'], function (attr) {
 					if (!attrs[attr]) attrs[attr] = scope[attr];
 				});
-				
+
 				// Options' utilities
 				scope.getObjValue = function (obj, path) {
 					var key;
 					if (!angular.isDefined(obj) || !angular.isDefined(path)) return obj;
 					path = angular.isArray(path) ? path : path.split('.');
 					key = path.shift();
-					
+
 					if (key.indexOf('[') > 0) {
 						var match = key.match(/(\w+)\[(\d+)\]/);
 						if (match !== null) {
@@ -117,7 +116,7 @@
 					if (!angular.isDefined(obj)) obj = {};
 					path = angular.isArray(path) ? path : path.split('.');
 					key = path.shift();
-					
+
 					if (key.indexOf('[') > 0) {
 						var match = key.match(/(\w+)\[(\d+)\]/);
 						if (match !== null) {
@@ -134,7 +133,7 @@
 				scope.optionEquals = function (option, value) {
 					return angular.equals(scope.optionValue(option), angular.isDefined(value) ? value : scope.value);
 				};
-				
+
 				// Value utilities
 				scope.setValue = function (value) {
 					if (!scope.multiple) scope.value = scope.valueAttr == null ? value : scope.getObjValue(value || {}, scope.valueAttr);
@@ -143,14 +142,14 @@
 				scope.hasValue = function () {
 					return scope.multiple ? (scope.value || []).length > 0 : !!scope.value;
 				};
-				
+
 				// Remote fetching
 				scope.request = function (paramName, paramValue, remote, remoteParam) {
 					var promise, remoteOptions = {};
 					if (scope.disabled) return $q.reject();
 					if (!angular.isDefined(remote))
 						throw 'Remote attribute is not defined';
-					
+
 					scope.loading = true;
 					scope.options = [];
 					remoteOptions[paramName] = paramValue;
@@ -166,310 +165,301 @@
 						.then(function (data) {
 							scope.options = data.data || data;
                             allOptions = allOptions.concat(scope.options);
-                            scope.filterOptions();
-                            scope.loading = false;
-                            initDeferred.resolve();
-                        }, function (error) {
-                            scope.loading = false;
-                            initDeferred.reject();
-                            throw 'Error while fetching data: ' + (error.message || error);
-                        });
-                    return promise;
-                };
-                scope.fetch = function () {
-                    return scope.request('search', scope.search || '', scope.remote, scope.remoteParam);
-                };
-                scope.fetchValidation = function (value) {
-                    return scope.request('value', value, scope.remoteValidation, scope.remoteValidationParam);
-                };
-                if (!angular.isDefined(scope.remote)) {
-                    scope.remote = false;
-                    scope.remoteValidation = false;
-                    initDeferred.resolve();
-                } else
-                if (!angular.isDefined(scope.remoteValidation))
-                    scope.remoteValidation = false;
-                if (scope.remote)
-                    $timeout(function () {
-                        $q.when(!scope.hasValue() || !scope.remoteValidation
-                                ? angular.noop
-                                : scope.fetchValidation(scope.value)
-                        ).then(function () {
-                                scope.$watch('search', function () {
-                                    $timeout(scope.fetch);
-                                });
-                            });
-                    });
+							scope.filterOptions();
+							scope.loading = false;
+							initDeferred.resolve();
+						}, function (error) {
+							scope.loading = false;
+							initDeferred.reject();
+							throw 'Error while fetching data: ' + (error.message || error);
+						});
+					return promise;
+				};
+				scope.fetch = function () {
+					return scope.request('search', scope.search || '', scope.remote, scope.remoteParam);
+				};
+				scope.fetchValidation = function (value) {
+					return scope.request('value', value, scope.remoteValidation, scope.remoteValidationParam);
+				};
+				if (!angular.isDefined(scope.remote)) {
+					scope.remote = false;
+					scope.remoteValidation = false;
+					initDeferred.resolve();
+				} else
+					if (!angular.isDefined(scope.remoteValidation))
+						scope.remoteValidation = false;
+				if (scope.remote)
+					$timeout(function () {
+						$q.when(!scope.hasValue() || !scope.remoteValidation
+							? angular.noop
+							: scope.fetchValidation(scope.value)
+						).then(function () {
+							scope.$watch('search', function () {
+								$timeout(scope.fetch);
+							});
+						});
+					});
 
-                // Fill with options in the select
-                scope.optionToObject = function (option, group) {
-                    var object  = {},
-                        element = angular.element(option);
+				// Fill with options in the select
+				scope.optionToObject = function (option, group) {
+					var object  = {},
+						element = angular.element(option);
 
-                    angular.forEach(option.dataset, function (value, key) {
-                        if (!key.match(/^\$/)) object[key] = value;
-                    });
-                    if (option.value)
-                        scope.setObjValue(object, scope.valueAttr || 'value', option.value);
-                    if (element.text())
-                        scope.setObjValue(object, scope.labelAttr, element.text().trim());
-                    if (angular.isDefined(group))
-                        scope.setObjValue(object, scope.groupAttr, group);
-                    scope.options.push(object);
+					angular.forEach(option.dataset, function (value, key) {
+						if (!key.match(/^\$/)) object[key] = value;
+					});
+					if (option.value)
+						scope.setObjValue(object, scope.valueAttr || 'value', option.value);
+					if (element.text())
+						scope.setObjValue(object, scope.labelAttr, element.text().trim());
+					if (angular.isDefined(group))
+						scope.setObjValue(object, scope.groupAttr, group);
+					scope.options.push(object);
 
-                    if (element.attr('selected') && (scope.multiple || !scope.hasValue()))
-                        if (!scope.multiple) {
-                            if (!scope.value) scope.value = scope.optionValue(object);
-                        } else {
-                            if (!scope.value) scope.value = [];
-                            scope.value.push(scope.optionValue(object));
-                        }
-                };
-                scope.fillWithHtml = function () {
-                    scope.options = [];
-                    angular.forEach(clone, function (element) {
-                        var tagName = (element.tagName || '').toLowerCase();
+					if (element.attr('selected') && (scope.multiple || !scope.hasValue()))
+						if (!scope.multiple) {
+							if (!scope.value) scope.value = scope.optionValue(object);
+						} else {
+							if (!scope.value) scope.value = [];
+							scope.value.push(scope.optionValue(object));
+						}
+				};
+				scope.fillWithHtml = function () {
+					scope.options = [];
+					angular.forEach(clone, function (element) {
+						var tagName = (element.tagName || '').toLowerCase();
 
-                        if (tagName == 'option') scope.optionToObject(element);
-                        if (tagName == 'optgroup') {
-                            angular.forEach(element.querySelectorAll('option'), function (option) {
-                                scope.optionToObject(option, (element.attributes.label || {}).value);
-                            });
-                        }
-                    });
-                    scope.updateSelected();
-                };
+						if (tagName == 'option') scope.optionToObject(element);
+						if (tagName == 'optgroup') {
+							angular.forEach(element.querySelectorAll('option'), function (option) {
+								scope.optionToObject(option, (element.attributes.label || {}).value);
+							});
+						}
+					});
+					scope.updateSelected();
+				};
 
-                // Initialization
-                scope.initialize = function () {
-                    if (!scope.remote && (!angular.isArray(scope.options) || !scope.options.length))
-                        scope.fillWithHtml();
-                    if (scope.hasValue()) {
-                        if (!scope.multiple) {
-                            if (angular.isArray(scope.value)) scope.value = scope.value[0];
-                        } else {
-                            if (!angular.isArray(scope.value)) scope.value = [scope.value];
-                        }
-                        scope.updateSelected();
-                        scope.filterOptions();
-                        scope.updateValue();
-                    }
-                };
-                scope.$watch('multiple', function () {
-                    $timeout(scope.setInputWidth);
-                    initDeferred.promise.then(scope.initialize, scope.initialize);
-                });
+				// Initialization
+				scope.initialize = function () {
+					if (!scope.remote && (!angular.isArray(scope.options) || !scope.options.length))
+						scope.fillWithHtml();
+					if (scope.hasValue()) {
+						if (!scope.multiple) {
+							if (angular.isArray(scope.value)) scope.value = scope.value[0];
+						} else {
+							if (!angular.isArray(scope.value)) scope.value = [scope.value];
+						}
+						scope.updateSelected();
+						scope.filterOptions();
+						scope.updateValue();
+					}
+				};
+				scope.$watch('multiple', function () {
+					$timeout(scope.setInputWidth);
+					initDeferred.promise.then(scope.initialize, scope.initialize);
+				});
 
-                // Dropdown utilities
-                scope.dropdownPosition = function () {
-                    var label       = input.parent()[0],
-                        styles      = getStyles(label),
-                        marginTop   = parseFloat(styles.marginTop || 0),
-                        marginLeft  = parseFloat(styles.marginLeft || 0);
+				// Dropdown utilities
+				scope.dropdownPosition = function () {
+					var label       = input.parent()[0],
+						styles      = getStyles(label),
+						marginTop   = parseFloat(styles.marginTop || 0),
+						marginLeft  = parseFloat(styles.marginLeft || 0);
 
-                    dropdown.css({
-                        top:   (label.offsetTop + label.offsetHeight + marginTop) + 'px',
-                        left:  (label.offsetLeft + marginLeft) + 'px',
-                        width: label.offsetWidth + 'px'
-                    });
-                };
-                scope.open = function () {
-                    if (scope.multiple && (scope.selectedValues || []).length >= scope.limit) return;
-                    scope.isOpen = true;
-                    scope.dropdownPosition();
-                    $timeout(scope.scrollToHighlighted);
-                };
-                scope.close = function () {
-                    scope.isOpen = false;
-                    scope.resetInput();
-                    if (scope.remote) $timeout(scope.fetch);
-                };
-                scope.decrementHighlighted = function () {
-                    scope.highlight(scope.highlighted - 1);
-                    scope.scrollToHighlighted();
-                };
-                scope.incrementHighlighted = function () {
-                    scope.highlight(scope.highlighted + 1);
-                    scope.scrollToHighlighted();
-                };
-                scope.highlight = function (index) {
-                    if (attrs.create && scope.search && index == -1)
-                        scope.highlighted = -1;
-                    else
-                    if (scope.filteredOptions.length)
-                        scope.highlighted = (scope.filteredOptions.length + index) % scope.filteredOptions.length;
-                };
-                scope.scrollToHighlighted = function () {
-                    var dd           = dropdown[0],
-                        option       = dd.querySelectorAll('li.selector-option')[scope.highlighted],
-                        styles       = getStyles(option),
-                        marginTop    = parseFloat(styles.marginTop || 0),
-                        marginBottom = parseFloat(styles.marginBottom || 0);
+					dropdown.css({
+						top:   (label.offsetTop + label.offsetHeight + marginTop) + 'px',
+						left:  (label.offsetLeft + marginLeft) + 'px',
+						width: label.offsetWidth + 'px'
+					});
+				};
+				scope.open = function () {
+					if (scope.multiple && (scope.selectedValues || []).length >= scope.limit) return;
+					scope.isOpen = true;
+					scope.dropdownPosition();
+					$timeout(scope.scrollToHighlighted);
+				};
+				scope.close = function () {
+					scope.isOpen = false;
+					scope.resetInput();
+					if (scope.remote) $timeout(scope.fetch);
+				};
+				scope.decrementHighlighted = function () {
+					scope.highlight(scope.highlighted - 1);
+					scope.scrollToHighlighted();
+				};
+				scope.incrementHighlighted = function () {
+					scope.highlight(scope.highlighted + 1);
+					scope.scrollToHighlighted();
+				};
+				scope.highlight = function (index) {
+					if (attrs.create && scope.search && index == -1)
+						scope.highlighted = -1;
+					else
+						if (scope.filteredOptions.length)
+							scope.highlighted = (scope.filteredOptions.length + index) % scope.filteredOptions.length;
+				};
+				scope.scrollToHighlighted = function () {
+					var dd           = dropdown[0],
+						option       = dd.querySelectorAll('li.selector-option')[scope.highlighted],
+						styles       = getStyles(option),
+						marginTop    = parseFloat(styles.marginTop || 0),
+						marginBottom = parseFloat(styles.marginBottom || 0);
 
-                    if (!scope.filteredOptions.length) return;
+					if (!scope.filteredOptions.length) return;
 
-                    if (option.offsetTop + option.offsetHeight + marginBottom > dd.scrollTop + dd.offsetHeight)
-                        $timeout(function () {
-                            dd.scrollTop = option.offsetTop + option.offsetHeight + marginBottom - dd.offsetHeight;
-                        });
+					if (option.offsetTop + option.offsetHeight + marginBottom > dd.scrollTop + dd.offsetHeight)
+						$timeout(function () {
+							dd.scrollTop = option.offsetTop + option.offsetHeight + marginBottom - dd.offsetHeight;
+						});
 
-                    if (option.offsetTop - marginTop < dd.scrollTop)
-                        $timeout(function () {
-                            dd.scrollTop = option.offsetTop - marginTop;
-                        });
-                };
-                scope.createOption = function (value) {
-                    $q.when((function () {
-                        var option = {};
-                        if (angular.isFunction(scope.create)) {
-                            option = scope.create({ input: value });
-                        } else {
-                            scope.setObjValue(option, scope.labelAttr, value);
-                            scope.setObjValue(option, scope.valueAttr || 'value', value);
-                        }
-                        return option;
-                    })()).then(function (option) {
-                        scope.options.push(option);
-                        scope.set(option);
-                    });
-                };
-                scope.set = function (option) {
-                    if (scope.multiple && (scope.selectedValues || []).length >= scope.limit) return;
+					if (option.offsetTop - marginTop < dd.scrollTop)
+						$timeout(function () {
+							dd.scrollTop = option.offsetTop - marginTop;
+						});
+				};
+				scope.createOption = function (value) {
+					$q.when((function () {
+						var option = {};
+						if (angular.isFunction(scope.create)) {
+							option = scope.create({ input: value });
+						} else {
+							scope.setObjValue(option, scope.labelAttr, value);
+							scope.setObjValue(option, scope.valueAttr || 'value', value);
+						}
+						return option;
+					})()).then(function (option) {
+						scope.options.push(option);
+						scope.set(option);
+					});
+				};
+				scope.set = function (option) {
+					if (scope.multiple && (scope.selectedValues || []).length >= scope.limit) return;
 
-                    if (!angular.isDefined(option))
-                        option = scope.filteredOptions[scope.highlighted];
+					if (!angular.isDefined(option))
+						option = scope.filteredOptions[scope.highlighted];
 
-                    if (!scope.multiple) scope.selectedValues = [option];
-                    else {
-                        if (!scope.selectedValues)
-                            scope.selectedValues = [];
-                        if (scope.selectedValues.indexOf(option) < 0)
-                            scope.selectedValues.push(option);
-                    }
-                    if (!scope.multiple || scope.closeAfterSelection || (scope.selectedValues || []).length >= scope.limit) scope.close();
-                    scope.resetInput();
-                    selectCtrl.$setDirty();
-                };
-                scope.unset = function (index) {
-                    if (!scope.multiple) scope.selectedValues = [];
-                    else scope.selectedValues.splice(angular.isDefined(index) ? index : scope.selectedValues.length - 1, 1);
-                    scope.resetInput();
-                    selectCtrl.$setDirty();
-                };
-                scope.keydown = function (e) {
-                    switch (e.keyCode) {
-                        case KEYS.up:
-                            if (!scope.isOpen) break;
-                            scope.decrementHighlighted();
-                            e.preventDefault();
-                            break;
-                        case KEYS.down:
-                            if (!scope.isOpen) scope.open();
-                            else scope.incrementHighlighted();
-                            e.preventDefault();
-                            break;
-                        case KEYS.escape:
-                            scope.highlight(0);
-                            scope.close();
-                            break;
-                        case KEYS.enter:
-                            if (scope.isOpen) {
-                                if (attrs.create && scope.search && scope.highlighted == -1)
-                                    scope.createOption(e.target.value);
-                                else
-                                if (scope.filteredOptions.length)
-                                    scope.set();
-                                e.preventDefault();
-                            }
-                            break;
-                        case KEYS.backspace:
-                            if (!input.val()) {
-                                var search = scope.getObjValue(scope.selectedValues.slice(-1)[0] || {}, scope.labelAttr || '');
-                                scope.unset();
-                                scope.open();
-                                if (scope.softDelete && !scope.disableSearch)
-                                    $timeout(function () {
-                                        scope.search = search;
-                                    });
-                                e.preventDefault();
-                            }
-                            break;
-                        case KEYS.left:
-                        case KEYS.right:
-                        case KEYS.shift:
-                        case KEYS.ctrl:
-                        case KEYS.alt:
-                        case KEYS.tab:
-                        case KEYS.leftCmd:
-                        case KEYS.rightCmd:
-                            break;
-                        default:
-                            if (!scope.multiple && scope.hasValue()) {
-                                e.preventDefault();
-                            } else {
-                                scope.open();
-                                scope.highlight(0);
-                            }
-                            break;
-                    }
-                };
+					if (!scope.multiple) scope.selectedValues = [option];
+					else {
+						if (!scope.selectedValues)
+							scope.selectedValues = [];
+						if (scope.selectedValues.indexOf(option) < 0)
+							scope.selectedValues.push(option);
+					}
+					if (!scope.multiple || scope.closeAfterSelection || (scope.selectedValues || []).length >= scope.limit) scope.close();
+					scope.resetInput();
+					selectCtrl.$setDirty();
+				};
+				scope.unset = function (index) {
+					if (!scope.multiple) scope.selectedValues = [];
+					else scope.selectedValues.splice(angular.isDefined(index) ? index : scope.selectedValues.length - 1, 1);
+					scope.resetInput();
+					selectCtrl.$setDirty();
+				};
+				scope.keydown = function (e) {
+					switch (e.keyCode) {
+						case KEYS.up:
+							if (!scope.isOpen) break;
+							scope.decrementHighlighted();
+							e.preventDefault();
+							break;
+						case KEYS.down:
+							if (!scope.isOpen) scope.open();
+							else scope.incrementHighlighted();
+							e.preventDefault();
+							break;
+						case KEYS.escape:
+							scope.highlight(0);
+							scope.close();
+							break;
+						case KEYS.enter:
+							if (scope.isOpen) {
+								if (attrs.create && scope.search && scope.highlighted == -1)
+									scope.createOption(e.target.value);
+								else
+									if (scope.filteredOptions.length)
+										scope.set();
+								e.preventDefault();
+							}
+							break;
+						case KEYS.backspace:
+							if (!input.val()) {
+								var search = scope.getObjValue(scope.selectedValues.slice(-1)[0] || {}, scope.labelAttr || '');
+								scope.unset();
+								scope.open();
+								if (scope.softDelete && !scope.disableSearch)
+									$timeout(function () {
+										scope.search = search;
+									});
+								e.preventDefault();
+							}
+							break;
+						case KEYS.left:
+						case KEYS.right:
+						case KEYS.shift:
+						case KEYS.ctrl:
+						case KEYS.alt:
+						case KEYS.tab:
+						case KEYS.leftCmd:
+						case KEYS.rightCmd:
+							break;
+						default:
+							if (!scope.multiple && scope.hasValue()) {
+								e.preventDefault();
+							} else {
+								scope.open();
+								scope.highlight(0);
+							}
+							break;
+					}
+				};
 
-                // Filtered options
-                scope.inOptions = function (options, value) {
-                    // if options are fetched from a remote source, it's not possibile to use
-                    // the simplest check with native `indexOf` function, beacause every object
-                    // in the results array has it own new address
-                    if (scope.remote)
-                        return options.filter(function (option) { return angular.equals(value, option); }).length > 0;
-                    else
-                        return options.indexOf(value) >= 0;
-                };
-                scope.filterOptions = function () {
-                    if(!scope.remote){
-                        scope.filteredOptions = filter(scope.options || [], scope.search);
-                    } else {
-                        scope.filteredOptions = scope.options;
-                    }
-                    if (!angular.isArray(scope.selectedValues)) scope.selectedValues = [];
-                    if (scope.multiple)
-                        scope.filteredOptions = scope.filteredOptions.filter(function (option) {
-                            return !scope.inOptions(scope.selectedValues, option);
-                        });
-                    else {
-                        var index = scope.filteredOptions.indexOf(scope.selectedValues[0]);
-                        if (index >= 0) scope.highlight(index);
-                    }
-                };
+				// Filtered options
+				scope.inOptions = function (options, value) {
+					// if options are fetched from a remote source, it's not possibile to use
+					// the simplest check with native `indexOf` function, beacause every object
+					// in the results array has it own new address
+					if (scope.remote)
+						return options.filter(function (option) { return angular.equals(value, option); }).length > 0;
+					else
+						return options.indexOf(value) >= 0;
+				};
+				scope.filterOptions = function () {
+					scope.filteredOptions = filter(scope.options || [], scope.search);
+					if (!angular.isArray(scope.selectedValues)) scope.selectedValues = [];
+					if (scope.multiple)
+						scope.filteredOptions = scope.filteredOptions.filter(function (option) {
+							return !scope.inOptions(scope.selectedValues, option);
+						});
+					else {
+						var index = scope.filteredOptions.indexOf(scope.selectedValues[0]);
+						if (index >= 0) scope.highlight(index);
+					}
+				};
 
-                // Input width utilities
-                scope.measureWidth = function () {
-                    var width,
-                        styles = getStyles(input[0]),
-                        shadow = angular.element('<span class="selector-shadow"></span>');
-                    shadow.text(input.val() || (!scope.hasValue() ? scope.placeholder : '') || '');
-                    angular.element(document.body).append(shadow);
-                    angular.forEach(['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'letterSpacing', 'textTransform', 'wordSpacing', 'textIndent'], function (style) {
-                        shadow.css(style, styles[style]);
-                    });
-                    width = shadow[0].offsetWidth;
-                    shadow.remove();
-                    return width;
-                };
-                scope.setInputWidth = function () {
-                    var width = scope.measureWidth() + 1;
-
-                    if(!scope.measureWidth() && !scope.value){
-                        input.css('width', '100%') }
-                    else {
-                        input.css('width', width + 'px')
-                    }
+				// Input width utilities
+				scope.measureWidth = function () {
+					var width,
+						styles = getStyles(input[0]),
+						shadow = angular.element('<span class="selector-shadow"></span>');
+					shadow.text(input.val() || (!scope.hasValue() ? scope.placeholder : '') || '');
+					angular.element(document.body).append(shadow);
+					angular.forEach(['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'letterSpacing', 'textTransform', 'wordSpacing', 'textIndent'], function (style) {
+						shadow.css(style, styles[style]);
+					});
+					width = shadow[0].offsetWidth;
+					shadow.remove();
+					return width;
+				};
+				scope.setInputWidth = function () {
+					var width = scope.measureWidth() + 1;
+					input.css('width', width + 'px');
 				};
 				scope.resetInput = function () {
 					input.val('');
 					scope.setInputWidth();
 					$timeout(function () { scope.search = ''; });
 				};
-				
+
 				scope.$watch('[search, options, value]', function () {
 					// hide selected items
 					scope.filterOptions();
@@ -480,7 +470,7 @@
 						if (scope.isOpen) scope.dropdownPosition();
 					});
 				}, true);
-				
+
 				// Update value
 				scope.updateValue = function (origin) {
 					if (!angular.isDefined(origin)) origin = scope.selectedValues || [];
@@ -498,7 +488,7 @@
 					if (angular.equals(newValue, oldValue) || scope.remote) return;
 					scope.updateSelected();
 				});
-				
+
 				// Update selected values
 				scope.updateSelected = function () {
 					if (!scope.multiple) scope.selectedValues = (scope.options || []).filter(function (option) { return scope.optionEquals(option); }).slice(0, 1);
@@ -523,7 +513,7 @@
 						scope.updateValue();
 					});
 				}, true);
-				
+
 				// DOM event listeners
 				input = angular.element(element[0].querySelector('.selector-input input'))
 					.on('focus', function () {
@@ -558,7 +548,7 @@
 				scope.$watch(function () { return inputCtrl.$touched; }, function ($touched) {
 					selectCtrl[$touched ? '$setTouched' : '$setUntouched']();
 				});
-				
+
 				// Expose APIs
 				angular.forEach(['open', 'close', 'fetch'], function (api) {
 					scope.api[api] = scope[api];
@@ -575,17 +565,17 @@
 							scope.selectedValues.map(function (option, index) {
 								return scope.inOptions(values, option) ? index : -1;
 							}).filter(function (index) { return index >= 0; });
-					
+
 					angular.forEach(indexes, function (index, i) {
 						scope.unset(index - i);
 					});
 				};
 			});
 		};
-		
+
 		return Selector;
 	})();
-	
+
 	angular
 		.module('selector', [])
 		.run(['$templateCache', function ($templateCache) {
@@ -628,5 +618,5 @@
 		.directive('selector', ['$filter', '$timeout', '$window', '$http', '$q', function ($filter, $timeout, $window, $http, $q) {
 			return new Selector($filter, $timeout, $window, $http, $q);
 		}]);
-	
+
 })(window.angular);
